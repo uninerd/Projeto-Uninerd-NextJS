@@ -37,6 +37,8 @@ jobs:
         run: docker compose restart nginx
       - run: npm run test:e2e
       - run: node scripts/summarize-browser.mjs
+      - name: Reset test proxy before resilience suite
+        run: docker compose restart nginx
       - run: npm run test:resilience
       - name: Deploy and rollback drill
         run: npm run test:release
