@@ -1,0 +1,15 @@
+node_modules/
+.next/
+out/
+coverage/
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+microservices/notifications/data/
+*.log
+test-results/
+playwright-report/
+.deploy/
+backups/
+.tools/presentation/
