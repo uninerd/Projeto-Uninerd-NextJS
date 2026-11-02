@@ -1,0 +1,15 @@
+{
+  "name": "uninerd-notifications",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@prometheus-io/client": "0.16.1",
+    "ioredis": "^5.8.2",
+    "zod": "4.6.7"
+  }
+}
