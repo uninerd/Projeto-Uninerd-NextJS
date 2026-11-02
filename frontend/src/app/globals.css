@@ -1,0 +1,12 @@
+@import "tailwindcss";
+@theme { --color-med-blue: #004a8c; --color-med-bg: #f0f4f8; --radius-med: 12px; }
+body { background: var(--color-med-bg); color: #182538; }
+button, a, select { cursor: pointer; }
+button:disabled { cursor: wait; opacity: .65; }
+input, select { min-width: 0; }
+@media (max-width: 767px) {
+  .uninerd-layout { flex-direction: column; }
+  .uninerd-sidebar { width: 100%; min-height: auto; }
+  .uninerd-sidebar nav { flex-direction: row; flex-wrap: wrap; }
+  .uninerd-sidebar nav a { padding: .5rem; font-size: .875rem; }
+}
