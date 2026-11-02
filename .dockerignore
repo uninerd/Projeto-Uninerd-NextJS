@@ -1,0 +1,15 @@
+node_modules
+.next
+.git
+.env
+.env.*
+docs
+tests
+frontend
+microservices
+backend/node_modules
+backend/.next
+rubrica08.pdf
+*.tsbuildinfo
+test-results
+playwright-report

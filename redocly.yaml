@@ -1,0 +1,12 @@
+extends:
+  - minimal
+rules:
+  # A versão entregue é local; não inventar um endereço de produção.
+  no-server-example.com: off
+  operation-operationId: error
+  operation-operationId-unique: error
+  operation-operationId-url-safe: error
+  operation-summary: error
+  operation-tag-defined: error
+  security-defined: error
+  no-unresolved-refs: error

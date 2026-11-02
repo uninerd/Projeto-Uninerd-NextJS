@@ -1,0 +1,24 @@
+groups:
+  - name: uninerd
+    rules:
+      - alert: UninerdTargetUnavailable
+        expr: up{job=~"backend|notifications"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'Coleta indisponível para {{ $labels.job }}'
+      - alert: UninerdApiErrors
+        expr: (sum(rate(uninerd_http_requests_total{status=~"5..",route!~"/api/(health|ready)"}[5m])) or vector(0)) / sum(rate(uninerd_http_requests_total{route!~"/api/(health|ready)"}[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Mais de 1% de respostas 5xx nos últimos 5 minutos'
+      - alert: UninerdInboxCircuitOpen
+        expr: uninerd_notifications_circuit_state == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Circuito da inbox permanece aberto'

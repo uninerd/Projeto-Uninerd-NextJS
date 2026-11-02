@@ -1,0 +1,117 @@
+name: Verify and package Uninerd
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_PROJECT_NAME: uninerd-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run install:apps
+      - run: npm run docs:check
+      - run: npm test
+      - run: npm test --prefix microservices/notifications
+      - run: npm run typecheck
+      - run: npm run build
+      - run: node scripts/setup-env.mjs
+      - run: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d --wait
+      - run: docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm --build seed
+      - run: node scripts/check-backend-runtime.mjs
+      - run: npm run test:integration
+      - run: npx playwright install --with-deps chromium
+      - name: Reset test proxy before browser suite
+        run: docker compose restart nginx
+      - run: npm run test:e2e
+      - run: node scripts/summarize-browser.mjs
+      - run: npm run test:resilience
+      - name: Deploy and rollback drill
+        run: npm run test:release
+        env:
+          DRILL_FRONTEND_IMAGE: uninerd-ci-frontend:latest
+          DRILL_BACKEND_IMAGE: uninerd-ci-backend:latest
+          DRILL_NOTIFICATIONS_IMAGE: uninerd-ci-notifications:latest
+      - name: Quality evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-evidence
+          path: |
+            docs/evidencias/qualidade-*
+            docs/evidencias/entrega-local.json
+            docs/evidencias/navegador-local.json
+            docs/evidencias/backend-local.json
+          if-no-files-found: ignore
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=150 frontend backend notifications nginx
+      - name: Stop test stack
+        if: always()
+        run: docker compose down
+
+  deliver:
+    needs: verify
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: docker/setup-buildx-action@v3
+      - name: Image prefix
+        id: image
+        shell: bash
+        run: echo "prefix=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        id: frontend
+        with:
+          context: frontend
+          push: true
+          tags: ${{ steps.image.outputs.prefix }}-frontend:${{ github.sha }}
+      - uses: docker/build-push-action@v6
+        id: backend
+        with:
+          context: backend
+          push: true
+          tags: ${{ steps.image.outputs.prefix }}-backend:${{ github.sha }}
+      - uses: docker/build-push-action@v6
+        id: notifications
+        with:
+          context: microservices/notifications
+          push: true
+          tags: ${{ steps.image.outputs.prefix }}-notifications:${{ github.sha }}
+      - name: Generate immutable release manifest
+        env:
+          IMAGE_PREFIX: ${{ steps.image.outputs.prefix }}
+          FRONTEND_DIGEST: ${{ steps.frontend.outputs.digest }}
+          BACKEND_DIGEST: ${{ steps.backend.outputs.digest }}
+          NOTIFICATIONS_DIGEST: ${{ steps.notifications.outputs.digest }}
+        run: node scripts/create-release-manifest.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.sha }}
+          path: .deploy/release.json
+          include-hidden-files: true

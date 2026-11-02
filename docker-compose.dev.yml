@@ -1,0 +1,12 @@
+# Local Next.js execution: publish dependencies only on loopback.
+# docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d db redis notifications
+services:
+  db:
+    ports: ['127.0.0.1:3317:3306']
+  redis:
+    ports: ['127.0.0.1:6379:6379']
+  notifications:
+    ports: ['127.0.0.1:3002:3002']
+networks:
+  database:
+    internal: false

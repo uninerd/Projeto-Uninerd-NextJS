@@ -1,0 +1,135 @@
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Run scripts/setup-env.mjs}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-uninerd_db}
+      MYSQL_USER: ${MYSQL_USER:-uninerd}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Run scripts/setup-env.mjs}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./database:/docker-entrypoint-initdb.d:ro
+    networks: [database]
+    healthcheck:
+      test: [CMD-SHELL, 'MYSQL_PWD="$$MYSQL_ROOT_PASSWORD" mysqladmin ping -h localhost -u root --silent']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: [redis-server, --appendonly, 'yes']
+    volumes: [redis_data:/data]
+    networks: [application]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  notifications:
+    build: ./microservices/notifications
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379
+      INTERNAL_KEY: ${NOTIFICATIONS_INTERNAL_KEY:?Run scripts/setup-env.mjs}
+      DATA_DIRECTORY: /data
+      PORT: 3002
+    volumes: [notifications_data:/data]
+    networks: [application]
+    depends_on:
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://localhost:3002/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE:-uninerd_db}
+      DB_USER: ${MYSQL_USER:-uninerd}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Run scripts/setup-env.mjs}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?Run scripts/setup-env.mjs}
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8080}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      CACHE_TTL_SECONDS: ${CACHE_TTL_SECONDS:-60}
+      NOTIFICATIONS_URL: http://notifications:3002
+      NOTIFICATIONS_INTERNAL_KEY: ${NOTIFICATIONS_INTERNAL_KEY:?Run scripts/setup-env.mjs}
+      PORT: 3001
+    networks: [application, database]
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      notifications: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://localhost:3001/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    networks: [application]
+    depends_on:
+      backend: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://localhost:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports: ['${APP_BIND_ADDRESS:-0.0.0.0}:${APP_PORT:-8080}:80']
+    volumes: ['./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro']
+    networks: [application]
+    depends_on:
+      frontend: { condition: service_healthy }
+      backend: { condition: service_healthy }
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1/api/health]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  seed:
+    profiles: [tools]
+    build:
+      context: .
+      dockerfile: scripts/Dockerfile.seed
+    command: [node, scripts/seed-admin.mjs]
+    environment:
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: ${MYSQL_DATABASE:-uninerd_db}
+      DB_USER: ${MYSQL_USER:-uninerd}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?Run scripts/setup-env.mjs}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@uninerd.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Configure ADMIN_PASSWORD}
+    networks: [database]
+    depends_on:
+      db: { condition: service_healthy }
+
+networks:
+  application:
+    driver: bridge
+  database:
+    driver: bridge
+    internal: true
+volumes:
+  mysql_data:
+  redis_data:
+  notifications_data:

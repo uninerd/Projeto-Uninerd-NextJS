@@ -1,0 +1,8 @@
+# Deploy immutable images by commit SHA; set these variables in the release environment.
+services:
+  frontend:
+    image: ${FRONTEND_IMAGE:?Set FRONTEND_IMAGE to a GHCR image with commit SHA}
+  backend:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to a GHCR image with commit SHA}
+  notifications:
+    image: ${NOTIFICATIONS_IMAGE:?Set NOTIFICATIONS_IMAGE to a GHCR image with commit SHA}
