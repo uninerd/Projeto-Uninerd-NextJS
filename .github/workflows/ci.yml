@@ -20,26 +20,36 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - run: npm ci
-      - run: npm run install:apps
-      - run: npm run docs:check
-      - run: npm test
-      - run: npm test --prefix microservices/notifications
-      - run: npm run typecheck
-      - run: npm run build
+      - name: Install root dependencies
+        run: npm ci
+      - name: Install application dependencies
+        run: npm run install:apps
+      - name: Validate OpenAPI contract
+        run: npm run docs:check
+      - name: Test application and domain rules
+        run: npm test
+      - name: Test notifications service
+        run: npm test --prefix microservices/notifications
+      - name: Check TypeScript types
+        run: npm run typecheck
+      - name: Build frontend and backend
+        run: npm run build
       - run: node scripts/setup-env.mjs
       - run: docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d --wait
       - run: docker compose -f docker-compose.yml -f docker-compose.dev.yml run --rm --build seed
       - run: node scripts/check-backend-runtime.mjs
-      - run: npm run test:integration
+      - name: Test API integration
+        run: npm run test:integration
       - run: npx playwright install --with-deps chromium
       - name: Reset test proxy before browser suite
         run: docker compose restart nginx
-      - run: npm run test:e2e
+      - name: Test desktop and mobile browser journeys
+        run: npm run test:e2e
       - run: node scripts/summarize-browser.mjs
       - name: Reset test proxy before resilience suite
         run: docker compose restart nginx
-      - run: npm run test:resilience
+      - name: Test service failures and recovery
+        run: npm run test:resilience
       - name: Deploy and rollback drill
         run: npm run test:release
         env:
@@ -87,19 +97,22 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - name: Build and publish frontend image
+        uses: docker/build-push-action@v6
         id: frontend
         with:
           context: frontend
           push: true
           tags: ${{ steps.image.outputs.prefix }}-frontend:${{ github.sha }}
-      - uses: docker/build-push-action@v6
+      - name: Build and publish backend image
+        uses: docker/build-push-action@v6
         id: backend
         with:
           context: backend
           push: true
           tags: ${{ steps.image.outputs.prefix }}-backend:${{ github.sha }}
-      - uses: docker/build-push-action@v6
+      - name: Build and publish notifications image
+        uses: docker/build-push-action@v6
         id: notifications
         with:
           context: microservices/notifications
