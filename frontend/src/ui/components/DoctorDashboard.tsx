@@ -2,6 +2,7 @@
 import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import api from '../services/api';
+import Link from 'next/link';
 
 interface Appointment {
   id: number;
@@ -21,7 +22,7 @@ const DoctorDashboard: React.FC = () => {
   const { user } = useContext(AuthContext);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [weekSchedule, setWeekSchedule] = useState<{ day: string; dateStr: string; slots: TimeSlot[] }[]>([]);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(new Date(Date.now() - 3 * 3600000).toISOString().slice(0,10));
   const [loading, setLoading] = useState(true);
 
   const fetchAppointments = useCallback(async () => {
@@ -38,35 +39,32 @@ const DoctorDashboard: React.FC = () => {
     }
   }, []);
 
-  const generateWeekSchedule = useCallback(() => {
-    const today = new Date();
+  const generateWeekSchedule = useCallback(async () => {
+    const today = new Date(Date.now() - 3 * 3600000);
     const schedule = [];
 
     for (let i = 0; i < 5; i++) {
       const date = new Date(today);
-      date.setDate(date.getDate() + i);
+      date.setUTCDate(date.getUTCDate() + i);
       const dateStr = date.toISOString().split('T')[0];
-      const dayName = date.toLocaleDateString('pt-BR', { weekday: 'short' });
+      const dayName = new Date(`${dateStr}T12:00:00-03:00`).toLocaleDateString('pt-BR', { weekday: 'short', timeZone: 'America/Sao_Paulo' });
 
+      const result = await api.get(`/doctors/${user?.id}/availability?date=${dateStr}`);
+      const availableHours: string[] = result.data.hours;
       const slots: TimeSlot[] = [];
       for (let hour = 8; hour < 18; hour++) {
         const timeStr = `${hour.toString().padStart(2, '0')}:00`;
 
         const appointmentOnSlot = appointments.find(app => {
           if (!app.date || app.status === 'CANCELADO') return false;
-          const appDate = new Date(app.date);
-          
-          const appDateStr = appDate.getFullYear() + '-' + 
-                             String(appDate.getMonth() + 1).padStart(2, '0') + '-' + 
-                             String(appDate.getDate()).padStart(2, '0');
-          
-          const appTimeStr = String(appDate.getHours()).padStart(2, '0') + ":00";
+          const appDateStr = app.date.slice(0,10);
+          const appTimeStr = app.date.slice(11,16);
           return appDateStr === dateStr && appTimeStr === timeStr;
         });
 
         slots.push({
           time: timeStr,
-          available: !appointmentOnSlot,
+          available: availableHours.includes(timeStr),
           patientName: appointmentOnSlot?.patientName,
         });
       }
@@ -79,14 +77,14 @@ const DoctorDashboard: React.FC = () => {
     }
 
     setWeekSchedule(schedule);
-  }, [appointments]);
+  }, [appointments, user?.id]);
 
   useEffect(() => {
     fetchAppointments();
   }, [fetchAppointments]);
 
   useEffect(() => {
-    generateWeekSchedule();
+    generateWeekSchedule().catch(() => setWeekSchedule([]));
   }, [appointments, generateWeekSchedule]);
 
   // Estatísticas com verificação de existência
@@ -107,6 +105,7 @@ const DoctorDashboard: React.FC = () => {
       <header className="bg-gradient-to-r from-green-500 to-green-600 p-8 rounded-lg shadow-lg text-white">
         <h1 className="text-4xl font-bold mb-2">Bem-vindo(a), Dr(a). {user?.nome}!</h1>
         <p className="text-green-100 text-lg">Gerencie sua agenda baseada no banco de dados</p>
+        <Link href="/my-schedule" className="inline-block mt-4 rounded bg-white px-4 py-2 font-semibold text-green-700">Configurar meus horários</Link>
       </header>
 
       {/* Cards de Estatísticas */}
@@ -161,11 +160,11 @@ const DoctorDashboard: React.FC = () => {
                       ? 'bg-green-50 text-green-700 border-green-200'
                       : 'bg-red-50 text-red-700 border-red-200 shadow-sm'
                   }`}
-                  title={slot.patientName ? `Paciente: ${slot.patientName}` : 'Livre'}
+                  title={slot.patientName ? `Paciente: ${slot.patientName}` : slot.available ? 'Livre' : 'Não liberado'}
                 >
                   <p className="text-sm">{slot.time}</p>
                   <p className="text-xs mt-1 truncate">
-                    {slot.available ? '✓ Livre' : `✗ ${slot.patientName || 'Ocupado'}`}
+                    {slot.available ? '✓ Livre' : `✗ ${slot.patientName || 'Não liberado'}`}
                   </p>
                 </div>
               ))}

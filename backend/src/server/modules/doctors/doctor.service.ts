@@ -3,7 +3,8 @@ import { requireCondition } from '@/server/shared/errors';
 import { cached, invalidate } from '@/server/shared/redis';
 import { userService } from '../users/user.service';
 import { doctorRepository } from './doctor.repository';
-import { doctorDto, createDoctorDto, validateDoctorAccount, type DoctorDto } from './doctor.dto';
+import { doctorDto, createDoctorDto, validateDoctorAccount, type DoctorDto, type DoctorScheduleDto, type DoctorWeekDto } from './doctor.dto';
+import { doctorScheduleRepository } from './doctor-schedule.repository';
 export const doctorService = {
   list(page: number, limit: number, term: string) {
     return cached('doctors', JSON.stringify([page, limit, term]), () => doctorRepository.list(page, limit, term));
@@ -14,9 +15,28 @@ export const doctorService = {
   },
   async availability(id: number, date: string) {
     await this.get(id);
-    const occupied = await doctorRepository.occupiedHours(id,date);
-    const hours = Array.from({ length: 10 }, (_,i) => `${String(i+8).padStart(2,'0')}:00`);
-    return { date, doctorId: id, hours: hours.filter(hour => !occupied.some(slot => slot.time === hour)) };
+    const slots = await doctorScheduleRepository.available(id, date);
+    return { date, doctorId: id, hours: slots.map(slot => slot.time).filter(hour => new Date(`${date}T${hour}:00-03:00`).getTime() > Date.now()) };
+  },
+  async schedule(actor: Actor, id: number, date: string) {
+    requireCondition(actor.nivel === 'medico' && actor.id === id, 403, 'Somente o próprio médico pode configurar sua agenda.');
+    await this.get(id);
+    return doctorScheduleRepository.day(id, date);
+  },
+  async saveSchedule(actor: Actor, id: number, data: DoctorScheduleDto) {
+    requireCondition(actor.nivel === 'medico' && actor.id === id, 403, 'Somente o próprio médico pode configurar sua agenda.');
+    const today = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    requireCondition(data.date >= today, 400, 'Não é possível alterar a disponibilidade de uma data passada.');
+    return doctorScheduleRepository.save(id, data.date, data.hours);
+  },
+  async weekSchedule(actor: Actor, id: number) {
+    requireCondition(actor.nivel === 'medico' && actor.id === id, 403, 'Somente o próprio médico pode configurar sua agenda.');
+    await this.get(id);
+    return doctorScheduleRepository.week(id);
+  },
+  async saveWeekSchedule(actor: Actor, id: number, data: DoctorWeekDto) {
+    requireCondition(actor.nivel === 'medico' && actor.id === id, 403, 'Somente o próprio médico pode configurar sua agenda.');
+    return doctorScheduleRepository.saveWeek(id, data.days);
   },
   async create(actor: Actor, input: unknown) {
     requireCondition(actor.nivel === 'admin', 403, 'Somente administradores podem cadastrar outros médicos.');

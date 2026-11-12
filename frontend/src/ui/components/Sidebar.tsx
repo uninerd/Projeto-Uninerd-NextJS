@@ -12,6 +12,7 @@ const Sidebar: React.FC = () => {
   const menuItems = [
     { path: '/', label: 'Início / Agenda', icon: '🏠' },
     { path: '/appointments', label: 'Lista de Consultas', icon: '📅' },
+    { path: '/my-schedule', label: 'Meus horários', icon: '🕘' },
     { path: '/doctors', label: 'Buscar Médicos', icon: '🩺' },
     { path: '/profile', label: 'Meu Perfil', icon: '👤' },
     { path: '/notifications', label: 'Notificações', icon: '🔔' },
@@ -19,6 +20,7 @@ const Sidebar: React.FC = () => {
 
   // FILTRAGEM DE ACESSO
   const filteredMenuItems = menuItems.filter((item) => {
+    if (item.path === '/my-schedule') return user?.nivel === 'medico';
     if (user?.nivel === 'paciente') {
       // Paciente não vê a aba "Médicos" (pois ele já tem a busca no Dashboard)
       return true;
@@ -60,7 +62,7 @@ const Sidebar: React.FC = () => {
                   : 'text-gray-600 hover:bg-gray-50 hover:text-blue-600'
               }`}
             >
-              <span className="text-lg">{item.icon}</span>
+              <span aria-hidden="true" className="text-lg">{item.icon}</span>
               {item.label}
             </Link>
           );

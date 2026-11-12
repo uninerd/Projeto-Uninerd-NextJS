@@ -5,6 +5,8 @@ export function routeLabel(path: string) {
   if (/^\/api\/users\/(login|register|logout|me)$/.test(path)) return path;
   if (/^\/api\/(users|doctors|appointments|specialties)\/\d+$/.test(path)) return path.replace(/\d+$/, ':id');
   if (/^\/api\/doctors\/\d+\/availability$/.test(path)) return '/api/doctors/:id/availability';
+  if (/^\/api\/doctors\/\d+\/schedule$/.test(path)) return '/api/doctors/:id/schedule';
+  if (/^\/api\/doctors\/\d+\/weekly-schedule$/.test(path)) return '/api/doctors/:id/weekly-schedule';
   return 'unmatched';
 }
 function createMetrics() {

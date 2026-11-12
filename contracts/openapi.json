@@ -3036,6 +3036,827 @@
         "description": "Respostas do backend incluem X-Request-Id. Escritas validam Origin; em navegador, use a mesma origem do frontend. Papéis e regras adicionais são descritos no resumo e no guia INTEGRACAO-APIS-DADOS.md."
       }
     },
+    "/doctors/{id}/schedule": {
+      "get": {
+        "summary": "Próprio médico consulta agenda efetiva de uma data",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoctorSchedule"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Corpo acima do limite de 16 KiB; bloqueio no backend ou Nginx.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getDoctorsByIdSchedule",
+        "tags": [
+          "Médicos"
+        ],
+        "description": "Respostas do backend incluem X-Request-Id. Escritas validam Origin; em navegador, use a mesma origem do frontend. Papéis e regras adicionais são descritos no resumo e no guia INTEGRACAO-APIS-DADOS.md."
+      },
+      "put": {
+        "summary": "Próprio médico define exceção por data; preserva horários reservados",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DoctorScheduleInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoctorSchedule"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Corpo acima do limite de 16 KiB; bloqueio no backend ou Nginx.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "putDoctorsByIdSchedule",
+        "tags": [
+          "Médicos"
+        ],
+        "description": "Respostas do backend incluem X-Request-Id. Escritas validam Origin; em navegador, use a mesma origem do frontend. Papéis e regras adicionais são descritos no resumo e no guia INTEGRACAO-APIS-DADOS.md."
+      }
+    },
+    "/doctors/{id}/weekly-schedule": {
+      "get": {
+        "summary": "Próprio médico consulta horários por dia da semana",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoctorWeek"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Corpo acima do limite de 16 KiB; bloqueio no backend ou Nginx.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getDoctorsByIdWeeklySchedule",
+        "tags": [
+          "Médicos"
+        ],
+        "description": "Respostas do backend incluem X-Request-Id. Escritas validam Origin; em navegador, use a mesma origem do frontend. Papéis e regras adicionais são descritos no resumo e no guia INTEGRACAO-APIS-DADOS.md."
+      },
+      "put": {
+        "summary": "Próprio médico define semana recorrente; preserva reservas futuras",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DoctorWeekInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sucesso",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoctorWeek"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Corpo acima do limite de 16 KiB; bloqueio no backend ou Nginx.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Requisição inválida, acesso negado, conflito ou dependência indisponível.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Identificador para correlação com os logs do backend; bloqueios do Nginx podem não incluí-lo.",
+                "schema": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "putDoctorsByIdWeeklySchedule",
+        "tags": [
+          "Médicos"
+        ],
+        "description": "Respostas do backend incluem X-Request-Id. Escritas validam Origin; em navegador, use a mesma origem do frontend. Papéis e regras adicionais são descritos no resumo e no guia INTEGRACAO-APIS-DADOS.md."
+      }
+    },
     "/specialties": {
       "get": {
         "summary": "Listar especialidades com cache; acesso público para cadastro",
@@ -5320,7 +6141,7 @@
           "type"
         ],
         "additionalProperties": false,
-        "description": "Horário local São Paulo UTC-03:00, sem offset, futuro, hora inteira entre 08 e 17. Paciente é obtido da sessão; patientId não é aceito."
+        "description": "Horário local São Paulo UTC-03:00, sem offset, futuro, hora inteira entre 08 e 17, disponibilizado pelo médico e sem reserva ativa. Exceção por data tem prioridade sobre semana recorrente. Paciente é obtido da sessão; patientId não é aceito."
       },
       "UpdateAppointment": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -5699,6 +6520,151 @@
           "doctorId",
           "date",
           "hours"
+        ],
+        "additionalProperties": false
+      },
+      "DoctorScheduleInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+          },
+          "hours": {
+            "maxItems": 10,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^(0[89]|1[0-7]):00$"
+            }
+          }
+        },
+        "required": [
+          "date",
+          "hours"
+        ],
+        "additionalProperties": false
+      },
+      "DoctorWeekInput": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "days": {
+            "maxItems": 7,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "weekday": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 6
+                },
+                "hours": {
+                  "maxItems": 10,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^(0[89]|1[0-7]):00$"
+                  }
+                }
+              },
+              "required": [
+                "weekday",
+                "hours"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "days"
+        ],
+        "additionalProperties": false
+      },
+      "DoctorSchedule": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "doctorId": {
+            "type": "number"
+          },
+          "date": {
+            "type": "string"
+          },
+          "hours": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "occupiedHours": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "date",
+              "weekly"
+            ]
+          }
+        },
+        "required": [
+          "doctorId",
+          "date",
+          "hours",
+          "occupiedHours",
+          "source"
+        ],
+        "additionalProperties": false
+      },
+      "DoctorWeek": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "doctorId": {
+            "type": "number"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "weekday": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 6
+                },
+                "hours": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "occupiedHours": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "weekday",
+                "hours",
+                "occupiedHours"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "doctorId",
+          "days"
         ],
         "additionalProperties": false
       },

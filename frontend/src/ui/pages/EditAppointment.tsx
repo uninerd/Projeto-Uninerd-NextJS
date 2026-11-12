@@ -22,6 +22,10 @@ const EditAppointment: React.FC = () => {
   const [type, setType] = useState('consulta');
   const [status, setStatus] = useState('AGENDADO');
   const [loading, setLoading] = useState(true);
+  const [original, setOriginal] = useState<{ doctorId: string; date: string } | null>(null);
+  const [availableHours, setAvailableHours] = useState<string[]>([]);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState('');
 
   // Vai buscar os dados atuais da consulta para preencher o formulário
   useEffect(() => {
@@ -37,6 +41,7 @@ const EditAppointment: React.FC = () => {
         }
 
         setDoctorId(app.doctorId?.toString() || '');
+        setOriginal({ doctorId: String(app.doctorId), date: app.date });
         setType(app.type || 'consulta');
         setStatus(app.status || 'AGENDADO');
       } catch (error) {
@@ -50,6 +55,22 @@ const EditAppointment: React.FC = () => {
 
     fetchAppointment();
   }, [id, navigate]);
+
+  useEffect(() => {
+    if (!doctorId || !date || !original) return;
+    let active = true;
+    setAvailabilityLoading(true); setAvailabilityError(''); setAvailableHours([]);
+    api.get(`/doctors/${doctorId}/availability?date=${date}`)
+      .then(({ data }) => {
+        if (!active) return;
+        const ownHour = doctorId === original.doctorId && date === original.date.slice(0,10) ? [original.date.slice(11,16)] : [];
+        const values = [...new Set<string>([...data.hours, ...ownHour])].sort();
+        setAvailableHours(values); setTime(previous => values.includes(previous) ? previous : '');
+      })
+      .catch(() => { if (active) setAvailabilityError('Não foi possível consultar os horários disponíveis.'); })
+      .finally(() => { if (active) setAvailabilityLoading(false); });
+    return () => { active = false; };
+  }, [doctorId, date, original]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +104,8 @@ const EditAppointment: React.FC = () => {
     <div className="p-4 sm:p-8 bg-med-bg min-h-screen flex items-center justify-center">
       <form onSubmit={handleSubmit} className="bg-white p-4 sm:p-8 rounded-lg shadow-sm w-full max-w-lg flex flex-col gap-6 border-t-4 border-yellow-500">
         <h1 className="text-2xl font-bold text-gray-800 text-center">Editar Agendamento</h1>
+        {availabilityError && <p role="alert" className="text-red-600">{availabilityError}</p>}
+        {!availabilityLoading && !availabilityError && availableHours.length === 0 && <p role="status">Não há horários liberados nesta data.</p>}
 
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
@@ -90,18 +113,17 @@ const EditAppointment: React.FC = () => {
               label="Data"
               type="date"
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => { setDate(e.target.value); setTime(''); }}
               required
             />
           </div>
           <div className="flex-1">
-            <Input
-              label="Hora"
-              type="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              required
-            />
+            <label htmlFor="editappointment-hour" className="text-sm font-medium text-gray-700">Hora</label>
+            <select id="editappointment-hour" className="w-full border border-gray-300 rounded p-3 bg-white" value={time}
+              onChange={event => setTime(event.target.value)} disabled={availabilityLoading || !availableHours.length} required>
+              <option value="">Selecione um horário</option>
+              {availableHours.map(hour => <option key={hour} value={hour}>{hour}</option>)}
+            </select>
           </div>
         </div>
 
@@ -110,7 +132,7 @@ const EditAppointment: React.FC = () => {
           <select id="editappointment-select-1"
             className="border border-gray-300 rounded p-2 focus:outline-none focus:border-blue-500 bg-white"
             value={doctorId}
-            onChange={(e) => setDoctorId(e.target.value)}
+            onChange={(e) => { setDoctorId(e.target.value); setTime(''); }}
             required
           >
             <option value="" disabled>Selecione um médico...</option>
@@ -158,7 +180,7 @@ const EditAppointment: React.FC = () => {
           >
             Cancelar
           </button>
-          <Button type="submit" className="w-full">
+          <Button type="submit" className="w-full" disabled={availabilityLoading || !time || Boolean(availabilityError)}>
             Guardar Alterações
           </Button>
         </div>

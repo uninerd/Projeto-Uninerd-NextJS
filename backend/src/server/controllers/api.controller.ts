@@ -10,7 +10,7 @@ import { database } from '@/server/shared/database';
 import { redis } from '@/server/shared/redis';
 import { registerDto, loginDto, updateUserDto, paginationDto } from '@/server/modules/users/user.dto';
 import { userService } from '@/server/modules/users/user.service';
-import { doctorDto, specialtyDto } from '@/server/modules/doctors/doctor.dto';
+import { doctorDto, specialtyDto, doctorScheduleDto, doctorWeekDto, scheduleDate } from '@/server/modules/doctors/doctor.dto';
 import { doctorService } from '@/server/modules/doctors/doctor.service';
 import { appointmentDto, updateAppointmentDto } from '@/server/modules/appointments/appointment.dto';
 import { appointmentService } from '@/server/modules/appointments/appointment.service';
@@ -35,7 +35,7 @@ async function dispatch(request: NextRequest): Promise<NextResponse> {
   const parts = request.nextUrl.pathname.slice('/api/'.length).split('/').filter(Boolean);
   const [resource, action] = parts;
   const method = request.method;
-  if (parts.length > 2 && !(parts.length === 3 && resource === 'doctors' && parts[2] === 'availability')) throw new AppError(404, 'Endpoint não encontrado.');
+  if (parts.length > 2 && !(parts.length === 3 && resource === 'doctors' && ['availability', 'schedule', 'weekly-schedule'].includes(parts[2]))) throw new AppError(404, 'Endpoint não encontrado.');
   if (resource === 'health' && !action) {
     requireCondition(method === 'GET', 405, 'Método não permitido.');
     return json({ status: 'ok', service: 'uninerd-backend' });
@@ -71,9 +71,21 @@ async function dispatch(request: NextRequest): Promise<NextResponse> {
     throw new AppError(405, 'Método não permitido.');
   }
   if (resource === 'doctors') {
+    if (parts[2] === 'weekly-schedule') {
+      const id = idDto.parse(action);
+      if (method === 'GET') return json(await doctorService.weekSchedule(actor, id));
+      if (method === 'PUT') return json(await doctorService.saveWeekSchedule(actor, id, doctorWeekDto.parse(await body(request))));
+      throw new AppError(405, 'Método não permitido.');
+    }
+    if (parts[2] === 'schedule') {
+      const id = idDto.parse(action);
+      if (method === 'GET') return json(await doctorService.schedule(actor, id, scheduleDate.parse(request.nextUrl.searchParams.get('date'))));
+      if (method === 'PUT') return json(await doctorService.saveSchedule(actor, id, doctorScheduleDto.parse(await body(request))));
+      throw new AppError(405, 'Método não permitido.');
+    }
     if (parts[2] === 'availability') {
       requireCondition(method === 'GET', 405, 'Método não permitido.');
-      const date = z.iso.date().parse(request.nextUrl.searchParams.get('date'));
+      const date = scheduleDate.parse(request.nextUrl.searchParams.get('date'));
       return json(await doctorService.availability(idDto.parse(action),date));
     }
     if (!action && method === 'GET') {

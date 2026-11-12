@@ -15,6 +15,7 @@
     "test:integration": "tsx --env-file=.env --test tests/integration/*.test.ts",
     "test:e2e": "node --env-file=.env node_modules/@playwright/test/cli.js test",
     "seed": "node --env-file=.env backend/scripts/seed-admin.mjs",
+    "db:migrate": "node --env-file=.env backend/scripts/migrate.mjs",
     "docker:up": "docker compose up --build -d",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs --follow",

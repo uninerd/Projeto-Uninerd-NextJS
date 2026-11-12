@@ -3,5 +3,7 @@ WORKDIR /app
 COPY backend/package.json backend/package-lock.json ./
 RUN npm ci --omit=dev --no-fund --no-audit
 COPY backend/scripts/seed-admin.mjs ./scripts/seed-admin.mjs
+COPY backend/scripts/migrate.mjs ./scripts/migrate.mjs
+COPY database/03-doctor-availability.sql ./database/03-doctor-availability.sql
 USER node
 CMD ["node", "scripts/seed-admin.mjs"]

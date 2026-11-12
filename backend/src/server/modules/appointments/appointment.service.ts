@@ -21,7 +21,7 @@ export const appointmentService = {
     const existing = await this.get(actor, id);
     AppointmentAggregate.restore(existing).update(actor, data);
     await doctorService.get(data.doctorId);
-    const appointment = (await appointmentRepository.change(id, aggregate => aggregate.update(actor, data)))!;
+    const appointment = (await appointmentRepository.change(id, aggregate => aggregate.update(actor, data), data.doctorId))!;
     await publishAppointment(data.status === 'CANCELADO' ? 'appointment.cancelled' : 'appointment.updated', appointment);
     return { message: 'Agendamento atualizado com sucesso!' };
   },

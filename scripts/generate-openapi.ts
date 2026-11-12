@@ -1,7 +1,7 @@
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'node:fs';
 import { z } from 'zod';
 import { registerDto, loginDto, updateUserDto } from '../backend/src/server/modules/users/user.dto';
-import { doctorDto, createDoctorDto, specialtyDto } from '../backend/src/server/modules/doctors/doctor.dto';
+import { doctorDto, createDoctorDto, specialtyDto, doctorScheduleDto, doctorWeekDto } from '../backend/src/server/modules/doctors/doctor.dto';
 import { appointmentDto, updateAppointmentDto } from '../backend/src/server/modules/appointments/appointment.dto';
 const ref = (name: string) => ({ $ref: `#/components/schemas/${name}` });
 const schema = (value: z.ZodType, io: 'input' | 'output' = 'output') => z.toJSONSchema(value, { io,unrepresentable:'any' });
@@ -45,6 +45,14 @@ const spec = {
       delete:operation('Administrador exclui médico sem vínculos',{ parameters:[id] }),
     },
     '/doctors/{id}/availability':{ get:operation('Consultar horários livres sem dados de pacientes',{ parameters:[id,{ name:'date',in:'query',required:true,schema:{ type:'string',format:'date' } }],response:'Availability' }) },
+    '/doctors/{id}/schedule':{
+      get:operation('Próprio médico consulta agenda efetiva de uma data',{ parameters:[id,{ name:'date',in:'query',required:true,schema:{ type:'string',format:'date' } }],response:'DoctorSchedule' }),
+      put:operation('Próprio médico define exceção por data; preserva horários reservados',{ parameters:[id],body:'DoctorScheduleInput',response:'DoctorSchedule' }),
+    },
+    '/doctors/{id}/weekly-schedule':{
+      get:operation('Próprio médico consulta horários por dia da semana',{ parameters:[id],response:'DoctorWeek' }),
+      put:operation('Próprio médico define semana recorrente; preserva reservas futuras',{ parameters:[id],body:'DoctorWeekInput',response:'DoctorWeek' }),
+    },
     '/specialties':{
       get:operation('Listar especialidades com cache; acesso público para cadastro',{ public:true,response:'SpecialtyList' }),
       post:operation('Administrador cria especialidade',{ body:'SpecialtyInput',status:201,response:'SpecialtyWrite' }),
@@ -72,6 +80,9 @@ const spec = {
     Profile:schema(z.object({ success:z.literal(true),data:user })),LoginResponse:schema(z.object({ success:z.literal(true),user })),
     DoctorPage:schema(page(doctor)),AppointmentPage:schema(page(appointment)),
     Availability:schema(z.object({ doctorId:z.number(),date:z.string(),hours:z.array(z.string()) })),
+    DoctorScheduleInput:schema(doctorScheduleDto,'input'),DoctorWeekInput:schema(doctorWeekDto,'input'),
+    DoctorSchedule:schema(z.object({ doctorId:z.number(),date:z.string(),hours:z.array(z.string()),occupiedHours:z.array(z.string()),source:z.enum(['date','weekly']) })),
+    DoctorWeek:schema(z.object({ doctorId:z.number(),days:z.array(z.object({ weekday:z.number().int().min(0).max(6),hours:z.array(z.string()),occupiedHours:z.array(z.string()) })) })),
     SpecialtyList:schema(z.array(z.object({ id:z.number(),name:z.string() }))),SpecialtyWrite:schema(z.object({ id:z.number(),nome:z.string() })),
     AppointmentCreated:schema(z.object({ id:z.number().int().positive(),message:z.string() })),Message:schema(z.object({ message:z.string() })),Success:schema(z.object({ success:z.literal(true) })),
     Error:schema(z.object({ success:z.literal(false),message:z.string(),requestId:z.string().optional() })),
@@ -111,7 +122,7 @@ for (const [path,item] of Object.entries(spec.paths)) {
     }
   }
 }
-spec.components.schemas.CreateAppointment.description = 'Horário local São Paulo UTC-03:00, sem offset, futuro, hora inteira entre 08 e 17. Paciente é obtido da sessão; patientId não é aceito.';
+spec.components.schemas.CreateAppointment.description = 'Horário local São Paulo UTC-03:00, sem offset, futuro, hora inteira entre 08 e 17, disponibilizado pelo médico e sem reserva ativa. Exceção por data tem prioridade sobre semana recorrente. Paciente é obtido da sessão; patientId não é aceito.';
 spec.components.schemas.UpdateAppointment.description = 'AGENDADO pode ser editado; CONCLUIDO/CANCELADO são terminais. Paciente não conclui, médico não transfere e conclusão preserva os dados originais.';
 spec.components.schemas.Register.description = 'Senha de 8 a 128 caracteres com maiúscula, minúscula, número e símbolo !@#$%^&*. CPF exige dígitos verificadores válidos; CRM/UF e especialidade são obrigatórios para médico. Não aceita admin.';
 spec.components.schemas.CreateDoctor.description = 'Somente administrador. Além dos limites de formato, a senha segue as mesmas regras fortes do cadastro de usuários e a especialidade precisa existir.';

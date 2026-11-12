@@ -26,8 +26,9 @@ const CreateAppointment: React.FC = () => {
   const [type, setType] = useState('consulta');
   const [availableHours, setAvailableHours] = useState<string[]>([]);
   const [availabilityError, setAvailabilityError] = useState('');
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date(Date.now() - 3 * 3600000).toISOString().slice(0, 10);
 
 
   useEffect(() => {
@@ -39,11 +40,15 @@ const CreateAppointment: React.FC = () => {
   useEffect(() => {
     let active = true;
     setAvailableHours([]);
+    setTime('');
     setAvailabilityError('');
+    setAvailabilityLoading(false);
     if (!doctorId || !date) return;
+    setAvailabilityLoading(true);
     api.get(`/doctors/${doctorId}/availability?date=${date}`)
       .then(({ data }) => { if (active) setAvailableHours(data.hours); })
-      .catch(() => { if (active) setAvailabilityError('Não foi possível consultar os horários. Selecione a data novamente.'); });
+      .catch(() => { if (active) setAvailabilityError('Não foi possível consultar os horários. Selecione a data novamente.'); })
+      .finally(() => { if (active) setAvailabilityLoading(false); });
     return () => { active = false; };
   }, [doctorId, date]);
 
@@ -73,6 +78,7 @@ const CreateAppointment: React.FC = () => {
       <form onSubmit={handleSubmit} className="bg-white p-4 sm:p-8 rounded-lg shadow-sm w-full max-w-lg flex flex-col gap-6 border-t-4 border-blue-500">
         <h1 className="text-2xl font-bold text-gray-800 text-center">Novo Agendamento</h1>
         {availabilityError && <p role="alert" className="text-red-600">{availabilityError}</p>}
+        {doctorId && date && !availabilityLoading && !availabilityError && availableHours.length === 0 && <p role="status" className="text-gray-600">Este médico não possui horários disponíveis nesta data. Escolha outro dia.</p>}
 
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
@@ -95,6 +101,7 @@ const CreateAppointment: React.FC = () => {
               className="border border-gray-300 rounded p-[9px] focus:outline-none focus:border-blue-500 bg-white"
               value={time}
               onChange={(e) => setTime(e.target.value)}
+              disabled={availabilityLoading || !availableHours.length}
               required
             >
               <option value="" disabled>--:--</option>
@@ -144,7 +151,7 @@ const CreateAppointment: React.FC = () => {
           <button type="button" onClick={() => navigate('/appointments')} className="w-full bg-gray-200 text-gray-700 py-2 rounded font-medium hover:bg-gray-300 transition-colors">
             Cancelar
           </button>
-          <Button type="submit" className="w-full">Confirmar Agendamento</Button>
+          <Button type="submit" className="w-full" disabled={availabilityLoading || !time || Boolean(availabilityError)}>Confirmar Agendamento</Button>
         </div>
       </form>
     </div>

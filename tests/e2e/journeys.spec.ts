@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { database, write } from '../../backend/src/server/shared/database';
+import { login as loginWithBudget } from './auth';
 
 const password = 'JornadaForte@123';
 function cpf() {
@@ -9,12 +10,7 @@ function cpf() {
   return digits.join('');
 }
 async function login(page:Page,email:string,senha=password) {
-  await page.goto('/login');
-  await page.getByLabel('E-mail',{ exact:true }).fill(email);
-  await page.getByLabel('Senha',{ exact:true }).fill(senha);
-  const response = page.waitForResponse(r=>r.url().endsWith('/api/users/login') && r.request().method()==='POST');
-  await page.getByRole('button',{ name:'Entrar',exact:true }).click();
-  expect((await response).status()).toBe(200); await expect(page).toHaveURL('/');
+  await loginWithBudget(page,email,senha);
 }
 async function logout(page:Page) {
   const response=page.waitForResponse(r=>r.url().endsWith('/api/users/logout') && r.request().method()==='POST');
@@ -42,6 +38,7 @@ test.afterAll(async()=>{ await database().end(); });
 test('real UI: catalog CRUD, patient registration/profile, booking/edit/cancel, doctor completion and inbox recovery',async({ page },testInfo)=>{
   const key=randomUUID().slice(0,8); const doctorName=`Médico UI ${key}`;
   const doctorEmail=`ui-doctor-${key}@example.com`; const patientEmail=`ui-patient-${key}@example.com`;
+  const date=new Date(Date.now()+45*86400000).toISOString().slice(0,10);
   const accounts:number[]=[]; const appointments:number[]=[]; const errors:string[]=[];
   page.on('pageerror',error=>errors.push(error.message));
   try {
@@ -65,6 +62,26 @@ test('real UI: catalog CRUD, patient registration/profile, booking/edit/cancel, 
     await fitsViewport(page);
     await logout(page);
 
+    await login(page,doctorEmail);
+    await page.getByRole('link',{name:'Meus horários',exact:true}).click();
+    await expect(page.getByRole('heading',{name:'Meus horários de atendimento'})).toBeVisible();
+    const weekday=new Date(`${date}T12:00:00Z`).getUTCDay();
+    const dayName=['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'][weekday];
+    await page.getByLabel('Dia da semana').selectOption(String(weekday));
+    await page.getByRole('checkbox',{name:`${dayName} 10:00`,exact:true}).check();
+    await page.getByRole('checkbox',{name:`${dayName} 11:00`,exact:true}).check();
+    const savedWeek=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/doctors/${doctor.id}/weekly-schedule` && r.request().method()==='PUT');
+    await page.getByRole('button',{name:'Salvar agenda semanal',exact:true}).click();
+    expect((await savedWeek).ok()).toBe(true);
+    await expect(page.getByText('Agenda semanal salva.',{exact:false})).toBeVisible();
+    await page.reload();
+    await page.getByLabel('Dia da semana').selectOption(String(weekday));
+    await expect(page.getByRole('checkbox',{name:`${dayName} 10:00`,exact:true})).toBeChecked();
+    await page.getByLabel('Data de atendimento').fill(date);
+    await expect(page.getByRole('checkbox',{name:'10:00',exact:true})).toBeChecked();
+    await fitsViewport(page);
+    await logout(page);
+
     await page.goto('/register');
     await page.getByLabel('Nome Completo').fill(`Paciente UI ${key}`);
     await page.getByLabel('E-mail',{exact:true}).fill(patientEmail);
@@ -82,7 +99,6 @@ test('real UI: catalog CRUD, patient registration/profile, booking/edit/cancel, 
     await page.reload(); await expect(page.getByLabel('Nome Completo')).toHaveValue(`Paciente atualizado ${key}`);
     await fitsViewport(page);
 
-    const date=new Date(Date.now()+45*86400000).toISOString().slice(0,10);
     async function book() {
       await page.goto(`/appointments/new?doctorId=${doctor.id}`);
       await page.getByLabel('Data',{exact:true}).fill(date);
@@ -106,10 +122,10 @@ test('real UI: catalog CRUD, patient registration/profile, booking/edit/cancel, 
     const second=await book();
     await page.goto('/notifications');
     await expect(page.getByText(`Agendamento #${second.id} criado`,{exact:false})).toBeVisible();
-    await page.route('**/api/notifications',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({success:false,message:'Falha simulada de teste'})}));
+    await page.route('**/api/notifications*',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({success:false,message:'Falha simulada de teste'})}));
     await page.getByRole('button',{name:'Atualizar',exact:true}).click();
     await expect(page.locator('main').getByRole('alert')).toContainText('Não foi possível');
-    await page.unroute('**/api/notifications'); await page.getByRole('button',{name:'Atualizar',exact:true}).click();
+    await page.unroute('**/api/notifications*'); await page.getByRole('button',{name:'Atualizar',exact:true}).click();
     await expect(page.locator('main').getByRole('alert')).toHaveCount(0);
     await expect(page.getByText(`Agendamento #${second.id} criado`,{exact:false})).toBeVisible();
     await fitsViewport(page);
@@ -117,6 +133,16 @@ test('real UI: catalog CRUD, patient registration/profile, booking/edit/cancel, 
     await logout(page);
 
     await login(page,doctorEmail);
+    await page.goto('/my-schedule');
+    await page.getByLabel('Data de atendimento').fill(date);
+    await expect(page.getByRole('checkbox',{name:'10:00',exact:true})).toBeDisabled();
+    await page.getByRole('button',{name:'Fechar horários livres',exact:true}).click();
+    const savedDate=page.waitForResponse(r=>new URL(r.url()).pathname===`/api/doctors/${doctor.id}/schedule` && r.request().method()==='PUT');
+    await page.getByRole('button',{name:'Salvar disponibilidade',exact:true}).click();
+    expect((await savedDate).ok()).toBe(true);
+    await expect(page.getByRole('checkbox',{name:'10:00',exact:true})).toBeChecked();
+    await expect(page.getByRole('checkbox',{name:'11:00',exact:true})).not.toBeChecked();
+    await fitsViewport(page);
     await page.goto('/appointments');
     const active=page.getByRole('row').filter({hasText:'AGENDADO'});
     await expect(active).toHaveCount(1); await active.getByRole('button',{name:'Editar',exact:true}).click();
