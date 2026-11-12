@@ -70,7 +70,7 @@ const spec = {
       put:operation('Editar reserva ativa; paciente não conclui e médico não transfere',{ parameters:[id],body:'UpdateAppointment' }),
       delete:operation('Cancelar reserva ativa preservando histórico e liberando slot',{ parameters:[id] }),
     },
-    '/notifications':{ get:operation('Consultar inbox do usuário no microsserviço',{ response:'Notifications' }) },
+    '/notifications':{ get:operation('Consultar histórico de notificações do usuário',{ response:'Notifications', parameters:[{ name:'offset',in:'query',required:false,schema:{ type:'integer',minimum:0,maximum:1000000,default:0 } }] }) },
   },
   components:{ securitySchemes:{ session:{ type:'apiKey',in:'cookie',name:'uninerd_session' } },schemas:{
     Register:schema(registerDto,'input'), Login:schema(loginDto,'input'), UpdateUser:schema(updateUserDto,'input'),
@@ -87,7 +87,7 @@ const spec = {
     AppointmentCreated:schema(z.object({ id:z.number().int().positive(),message:z.string() })),Message:schema(z.object({ message:z.string() })),Success:schema(z.object({ success:z.literal(true) })),
     Error:schema(z.object({ success:z.literal(false),message:z.string(),requestId:z.string().optional() })),
     Health:schema(z.object({ status:z.literal('ok'),service:z.string() })),Readiness:schema(z.object({ status:z.enum(['ok','degraded']),database:z.boolean(),redis:z.boolean() })),
-    Notifications:schema(z.object({ data:z.array(z.object({ eventId:z.string(),appointmentId:z.number(),message:z.string(),timestamp:z.string() })) })),
+    Notifications:schema(z.object({ data:z.array(z.object({ eventId:z.string(),appointmentId:z.number(),message:z.string(),timestamp:z.string() })),nextOffset:z.number().int().nonnegative().nullable() })),
   } },
 };
 type Operation = ReturnType<typeof operation> & { operationId?: string; tags?: string[]; description?: string };

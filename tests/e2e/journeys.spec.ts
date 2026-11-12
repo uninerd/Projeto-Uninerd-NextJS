@@ -122,6 +122,8 @@ test('real UI: catalog CRUD, patient registration/profile, booking/edit/cancel, 
     const second=await book();
     await page.goto('/notifications');
     await expect(page.getByText(`Agendamento #${second.id} criado`,{exact:false})).toBeVisible();
+    await expect(page.getByText(`Agendamento #${first.id} atualizado`,{exact:false})).toBeVisible();
+    await expect(page.getByText(`Agendamento #${first.id} cancelado`,{exact:false})).toBeVisible();
     await page.route('**/api/notifications*',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({success:false,message:'Falha simulada de teste'})}));
     await page.getByRole('button',{name:'Atualizar',exact:true}).click();
     await expect(page.locator('main').getByRole('alert')).toContainText('Não foi possível');
@@ -150,6 +152,17 @@ test('real UI: catalog CRUD, patient registration/profile, booking/edit/cancel, 
     await submit(page,'Guardar Alterações',`/api/appointments/${second.id}`,'PUT');
     const completed=page.getByRole('row').filter({hasText:'CONCLUIDO'});
     await expect(completed).toHaveCount(1); await expect(completed.getByRole('button')).toHaveCount(0);
+    await page.goto('/notifications');
+    await expect(page.getByText(`Agendamento #${second.id} concluído pelo médico`,{exact:false})).toBeVisible();
+    const inbox=await (await page.request.get('/api/notifications')).json();
+    let newArrival=false;
+    const simulated={eventId:randomUUID(),appointmentId:second.id,message:'Notificação de teste recebida automaticamente.',timestamp:new Date().toISOString()};
+    await page.route('**/api/notifications*',route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({...inbox,data:newArrival?[simulated,...inbox.data]:inbox.data})}));
+    await page.reload();
+    await expect(page.getByText(`Agendamento #${second.id} concluído pelo médico`,{exact:false})).toBeVisible();
+    newArrival=true;
+    await expect(page.getByText(simulated.message,{exact:true})).toBeVisible({timeout:8000});
+    await page.unroute('**/api/notifications*');
     await fitsViewport(page);
     await logout(page);
     // Remove only this test's clinical records before exercising catalog deletion.

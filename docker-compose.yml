@@ -37,6 +37,7 @@ services:
       REDIS_URL: redis://redis:6379
       INTERNAL_KEY: ${NOTIFICATIONS_INTERNAL_KEY:?Run scripts/setup-env.mjs}
       DATA_DIRECTORY: /data
+      BACKEND_URL: ${NOTIFICATIONS_BACKEND_URL:-http://backend:3001}
       PORT: 3002
     volumes: [notifications_data:/data]
     networks: [application]

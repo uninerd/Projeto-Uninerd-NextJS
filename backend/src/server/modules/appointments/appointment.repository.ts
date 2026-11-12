@@ -4,6 +4,7 @@ import { AppointmentAggregate, type AppointmentSnapshot } from './domain/appoint
 import type { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 import { AppError } from '@/server/shared/errors';
 import { assertDoctorSlotOpen, lockDoctorSchedule } from '../doctors/doctor-schedule.repository';
+import { appointmentEvent, recordAppointmentEvent, publishAppointment } from '@/server/shared/events';
 export interface Appointment extends Omit<AppointmentSnapshot, 'id'> {
   id: number; patientName: string; doctorName: string;
 }
@@ -20,10 +21,11 @@ export const appointmentRepository = {
     return { data, total: count.total, page, last_page: Math.max(1, Math.ceil(count.total/limit)) };
   },
   async byId(id: number) { return (await rows<Appointment>(`${select} WHERE a.id=?`, [id]))[0]; },
-  async create(aggregate: AppointmentAggregate) {
+  async create(aggregate: AppointmentAggregate, actor: Actor) {
     const data = aggregate.toSnapshot();
     const connection = await database().getConnection();
     let id: number;
+    let event;
     try {
       await connection.beginTransaction();
       await lockDoctorSchedule(connection, data.doctorId);
@@ -31,16 +33,20 @@ export const appointmentRepository = {
       const [result] = await connection.execute<ResultSetHeader>(`INSERT INTO agendamentos (id_usuario,id_medico,data_consulta,tipo,status) VALUES (?,?,?,?,?)`,
         [data.patientId, data.doctorId, data.date.replace('T',' '), data.type, data.status]);
       id = result.insertId;
+      event = appointmentEvent({ ...data, id }, actor);
+      await recordAppointmentEvent(connection, event);
       await connection.commit();
     } catch (error) { await connection.rollback(); throw error; }
     finally { connection.release(); }
+    await publishAppointment(event!);
     return this.byId(id);
   },
   // Serialize changes to an appointment and validate its current state under the lock.
-  async change(id: number, mutate: (aggregate: AppointmentAggregate) => void, targetDoctorId?: number) {
+  async change(id: number, mutate: (aggregate: AppointmentAggregate) => void, actor: Actor, targetDoctorId?: number) {
     const previous = await this.byId(id);
     if (!previous) throw new AppError(404, 'Agendamento não encontrado.');
     const connection = await database().getConnection();
+    let event;
     try {
       await connection.beginTransaction();
       const doctorIds = [...new Set([previous.doctorId, targetDoctorId ?? previous.doctorId])].sort((a, b) => a - b);
@@ -58,9 +64,12 @@ export const appointmentRepository = {
       }
       await connection.execute<ResultSetHeader>(`UPDATE agendamentos SET id_medico=?,data_consulta=?,tipo=?,status=? WHERE id=?`,
         [data.doctorId, data.date.replace('T',' '), data.type, data.status, id]);
+      event = appointmentEvent({ ...data, id }, actor, current);
+      await recordAppointmentEvent(connection, event);
       await connection.commit();
     } catch (error) { await connection.rollback(); throw error; }
     finally { connection.release(); }
+    await publishAppointment(event!);
     return this.byId(id);
   },
 };

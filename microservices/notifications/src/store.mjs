@@ -9,16 +9,20 @@ export function createStore(filename) {
     );
     CREATE INDEX IF NOT EXISTS user_notifications ON notifications(userId,timestamp);`);
   const insert = db.prepare('INSERT OR IGNORE INTO notifications VALUES (?,?,?,?,?)');
-  const list = db.prepare('SELECT eventId,appointmentId,message,timestamp FROM notifications WHERE userId=? ORDER BY timestamp DESC LIMIT 100');
+  const list = db.prepare('SELECT eventId,appointmentId,message,timestamp FROM notifications WHERE userId=? ORDER BY timestamp DESC,eventId DESC LIMIT ? OFFSET ?');
   return {
     save(event) {
       db.exec('BEGIN');
       try {
-        for (const id of new Set([event.patientId, event.doctorId])) insert.run(event.eventId,id,event.appointmentId,notificationMessage(event),event.timestamp);
+        let inserted=0;
+        for (const id of new Set([event.patientId, event.doctorId, event.previous?.doctorId, event.actorId].filter(Number.isSafeInteger))) {
+          inserted+=Number(insert.run(event.eventId,id,event.appointmentId,notificationMessage(event),event.timestamp).changes);
+        }
         db.exec('COMMIT');
+        return inserted;
       } catch (error) { db.exec('ROLLBACK'); throw error; }
     },
-    list(userId) { return list.all(userId); },
+    list(userId, offset = 0, limit = 100) { return list.all(userId, limit, offset); },
     close() { db.close(); },
   };
 }

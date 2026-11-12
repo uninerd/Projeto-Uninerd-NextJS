@@ -9,11 +9,11 @@ const circuit = globals.uninerdInboxCircuit ??= new CircuitBreaker({ threshold: 
   },
 });
 class NonRetryableResponse extends Error {}
-export async function readNotifications(userId: number, key: string) {
+export async function readNotifications(userId: number, key: string, offset = 0) {
   return circuit.execute(async () => {
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const response = await fetch(`${process.env.NOTIFICATIONS_URL ?? 'http://localhost:3002'}/notifications/${userId}`, {
+        const response = await fetch(`${process.env.NOTIFICATIONS_URL ?? 'http://localhost:3002'}/notifications/${userId}?offset=${offset}`, {
           headers: { 'x-internal-key': key }, signal: AbortSignal.timeout(1000), cache: 'no-store',
         });
         if (!response.ok) {

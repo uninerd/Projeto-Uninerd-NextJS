@@ -6,6 +6,7 @@ import { authenticate, checkOrigin, createSession, SESSION_COOKIE } from '@/serv
 import { log } from '@/server/shared/logger';
 import { metrics, routeLabel } from '@/server/shared/metrics';
 import { readNotifications } from '@/server/shared/notifications-client';
+import { authorizeOutbox, pendingAppointmentEvents, acknowledgeAppointmentEvents } from '@/server/shared/appointment-outbox';
 import { database } from '@/server/shared/database';
 import { redis } from '@/server/shared/redis';
 import { registerDto, loginDto, updateUserDto, paginationDto } from '@/server/modules/users/user.dto';
@@ -36,6 +37,15 @@ async function dispatch(request: NextRequest): Promise<NextResponse> {
   const [resource, action] = parts;
   const method = request.method;
   if (parts.length > 2 && !(parts.length === 3 && resource === 'doctors' && ['availability', 'schedule', 'weekly-schedule'].includes(parts[2]))) throw new AppError(404, 'Endpoint não encontrado.');
+  if (resource === 'internal' && action === 'appointment-events') {
+    authorizeOutbox(request.headers.get('x-internal-key'));
+    if (method === 'GET') return json({ data: await pendingAppointmentEvents() });
+    if (method === 'POST') {
+      const { eventIds } = z.object({ eventIds: z.array(z.uuid()).min(1).max(100) }).strict().parse(await body(request));
+      await acknowledgeAppointmentEvents(eventIds); return json({ success: true });
+    }
+    throw new AppError(405, 'Método não permitido.');
+  }
   if (resource === 'health' && !action) {
     requireCondition(method === 'GET', 405, 'Método não permitido.');
     return json({ status: 'ok', service: 'uninerd-backend' });
@@ -128,8 +138,9 @@ async function dispatch(request: NextRequest): Promise<NextResponse> {
     requireCondition(method === 'GET', 405, 'Método não permitido.');
     const internalKey = process.env.NOTIFICATIONS_INTERNAL_KEY;
     requireCondition(internalKey, 503, 'Serviço de notificações não configurado.');
+    const offset = z.coerce.number().int().min(0).max(1000000).parse(request.nextUrl.searchParams.get('offset') ?? '0');
     try {
-      return json(await readNotifications(actor.id, internalKey));
+      return json(await readNotifications(actor.id, internalKey, offset));
     } catch { throw new AppError(503, 'Notificações indisponíveis. Tente novamente em instantes.'); }
   }
   throw new AppError(404, 'Endpoint não encontrado.');

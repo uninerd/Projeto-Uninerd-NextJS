@@ -8,9 +8,9 @@ const db = await mysql.createConnection({
 });
 try {
   // Idempotent, additive migration; never deletes existing accounts or appointments.
-  for (const filename of ['03-doctor-availability.sql']) {
+  for (const filename of ['03-doctor-availability.sql', '04-appointment-outbox.sql']) {
     const sql = readFileSync(resolve('database', filename), 'utf8');
     for (const statement of sql.split(';').map(value => value.trim()).filter(Boolean)) await db.query(statement);
   }
-  console.log('Availability schema applied; existing data preserved.');
+  console.log('Availability and appointment outbox schemas applied; existing data preserved.');
 } finally { await db.end(); }

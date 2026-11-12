@@ -9,7 +9,7 @@ groups:
         annotations:
           summary: 'Coleta indisponível para {{ $labels.job }}'
       - alert: UninerdApiErrors
-        expr: (sum(rate(uninerd_http_requests_total{status=~"5..",route!~"/api/(health|ready)"}[5m])) or vector(0)) / sum(rate(uninerd_http_requests_total{route!~"/api/(health|ready)"}[5m])) > 0.01
+        expr: (sum(rate(uninerd_http_requests_total{status=~"5..",route!~"/api/(health|ready|internal/.*)"}[5m])) or vector(0)) / sum(rate(uninerd_http_requests_total{route!~"/api/(health|ready|internal/.*)"}[5m])) > 0.01
         for: 5m
         labels:
           severity: warning

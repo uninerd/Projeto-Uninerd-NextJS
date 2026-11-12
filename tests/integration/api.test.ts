@@ -1,13 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { database, write } from '../../backend/src/server/shared/database';
+import { execFileSync } from 'node:child_process';
+import { database, rows, write } from '../../backend/src/server/shared/database';
 import { redis } from '../../backend/src/server/shared/redis';
 import { assertResponseContract } from '../support/api-contract';
 
 const origin = process.env.TEST_API_ORIGIN ?? 'http://localhost:8080';
 const unique = randomUUID().replaceAll('-','');
 const password = 'TesteForte@123';
+function notificationService(action: 'stop' | 'start') {
+  // Outage injection is opt-in and restricted to the isolated validation stack.
+  assert.equal(process.env.TEST_NOTIFICATIONS_COMPOSE_PROJECT,'uninerd-agenda-validation');
+  execFileSync('docker',['--context','default','compose','-p','uninerd-agenda-validation','-f','docker-compose.yml','-f','.deploy/agenda-validation.compose.yml',action,'notifications'],
+    {env:{...process.env,APP_PORT:'18081',APP_BIND_ADDRESS:'127.0.0.1',APP_ORIGIN:origin},stdio:'pipe',timeout:30000});
+}
 function validCPF() {
   const digits = Array.from({ length:9 },() => Math.floor(Math.random()*10));
   for (const count of [10,11]) { const sum=digits.reduce((total,n,index)=>total+n*(count-index),0); const remainder=sum%11; digits.push(remainder<2?0:11-remainder); }
@@ -27,6 +34,7 @@ async function login(email: string, senha: string) {
 
 test('full flow: accounts, permissions, concurrent booking, Redis cache and notifications', async () => {
   const accounts:number[]=[]; const appointments:number[]=[];
+  let workerStopped=false;
   try {
     const health=await api('ready'); assert.equal(health.status,200); assert.equal((await health.json()).redis,true);
     const specialties=await (await api('specialties')).json(); assert.ok(specialties.length>0);
@@ -113,6 +121,16 @@ test('full flow: accounts, permissions, concurrent booking, Redis cache and noti
       await new Promise(resolve=>setTimeout(resolve,100));
     }
     assert.equal(delivered,true,'Pub/Sub notification must reach the patient inbox');
+    assert.equal((await fetch(`${origin}/api/internal/appointment-events`)).status,404,'The outbox must not be exposed by Nginx');
+    assert.equal((await api('notifications?offset=-1','GET',undefined,patientCookie)).status,400);
+    const secondEmail=`doctor-transfer-${unique}@example.com`;
+    const secondDoctorResponse=await api('doctors','POST',{name:'Médico Transferência',address:'Clínica de teste',specialty:specialties[0].name,crm:String(Date.now()).slice(-9),crmUf:'SP',email:secondEmail,senha:password},adminCookie);
+    assert.equal(secondDoctorResponse.status,201); const secondDoctor=await secondDoctorResponse.json(); accounts.push(secondDoctor.id);
+    const secondDoctorCookie=await login(secondEmail,password);
+    assert.equal((await api(`doctors/${secondDoctor.id}/schedule`,'PUT',{date:day,hours:['11:00']},secondDoctorCookie)).status,200);
+    if(process.env.TEST_NOTIFICATIONS_COMPOSE_PROJECT) { notificationService('stop'); workerStopped=true; }
+    assert.equal((await api(`appointments/${created.id}`,'PUT',{...payload,doctorId:secondDoctor.id,date:day+'T11:00:00',type:'exame',status:'AGENDADO'},patientCookie)).status,200);
+    assert.equal((await api(`appointments/${created.id}`,'PUT',{...payload,date:day+'T11:00:00',type:'exame',status:'AGENDADO'},patientCookie)).status,200);
     assert.equal((await api(`appointments/${created.id}`,'DELETE',undefined,patientCookie)).status,200);
     const free=await (await api(`doctors/${doctor.id}/availability?date=${date.slice(0,10)}`,'GET',undefined,patientCookie)).json(); assert.ok(free.hours.includes('10:00'));
     const replacement=await api('appointments','POST',payload,patientCookie); assert.equal(replacement.status,201);
@@ -122,8 +140,42 @@ test('full flow: accounts, permissions, concurrent booking, Redis cache and noti
     assert.equal((await api(`appointments/${replacementId}`,'DELETE',undefined,patientCookie)).status,409);
     assert.equal((await api(`appointments/${replacementId}`,'PUT',{ ...payload,status:'AGENDADO' },doctorCookie)).status,409);
     const closed=await (await api(`appointments/${replacementId}`,'GET',undefined,doctorCookie)).json(); assert.equal(closed.status,'CONCLUIDO');
+    const another=await api('appointments','POST',{...payload,date:day+'T11:00:00'},patientCookie);
+    assert.equal(another.status,201); const anotherId=(await another.json()).id; appointments.push(anotherId);
+    assert.equal((await api(`appointments/${anotherId}`,'PUT',{...payload,date:day+'T11:00:00',status:'CANCELADO'},adminCookie)).status,200);
+    if(workerStopped) { notificationService('start'); workerStopped=false; }
+    for(const cookie of [patientCookie,doctorCookie,secondDoctorCookie,adminCookie]) {
+      let complete=false;
+      const deadline=Date.now()+20000;
+      while(Date.now()<deadline) {
+        const response=await api('notifications','GET',undefined,cookie);
+        if(response.ok) {
+          const {data}=await response.json();
+          const relevant=data.filter((n:{appointmentId:number})=>[created.id,replacementId,anotherId].includes(n.appointmentId));
+          assert.equal(new Set(relevant.map((n:{eventId:string})=>n.eventId)).size,relevant.length,'No duplicated deliveries');
+          const messages=relevant.map((n:{message:string})=>n.message).join(' ');
+          complete=cookie===secondDoctorCookie ? relevant.filter((n:{appointmentId:number})=>n.appointmentId===created.id).length===2
+            : cookie===adminCookie ? messages.includes(`Agendamento #${anotherId} cancelado pelo administrador`)
+            : ['criado pelo paciente','atualizado pelo paciente','reagendado pelo paciente','cancelado pelo paciente','concluído pelo médico','cancelado pelo administrador'].every(text=>messages.includes(text));
+          if(complete) break;
+        }
+        await new Promise(resolve=>setTimeout(resolve,300));
+      }
+      assert.equal(complete,true,'Every confirmed action must reach its recipients, including after service downtime');
+    }
+    const pending=await rows<{total:number}>('SELECT COUNT(*) AS total FROM appointment_outbox WHERE acknowledged_at IS NULL AND JSON_EXTRACT(payload,\'$.patientId\')=?',[patient.id]);
+    // Recovery acknowledges only after both inboxes commit; allow the in-flight ACK to finish.
+    if(pending[0].total>0) await new Promise(resolve=>setTimeout(resolve,3500));
+    const remaining=await rows<{total:number}>('SELECT COUNT(*) AS total FROM appointment_outbox WHERE acknowledged_at IS NULL AND JSON_EXTRACT(payload,\'$.patientId\')=?',[patient.id]);
+    assert.equal(remaining[0].total,0);
+    const events=await rows<{payload:string|{event:string}}>('SELECT payload FROM appointment_outbox WHERE JSON_EXTRACT(payload,\'$.appointmentId\')=?',[created.id]);
+    assert.deepEqual(events.map(row=>typeof row.payload==='string'?JSON.parse(row.payload).event:row.payload.event).sort(),
+      ['appointment.created','appointment.updated','appointment.rescheduled','appointment.rescheduled','appointment.cancelled'].sort(),
+      'Failed and unauthorized operations must not append successful lifecycle events');
     const logout=await api('users/logout','POST',{},patientCookie); assert.equal(logout.status,200); assert.match(logout.headers.get('set-cookie')!,/Max-Age=0/i);
   } finally {
+    if(workerStopped) notificationService('start');
+    for(const id of accounts) await write('DELETE FROM appointment_outbox WHERE JSON_EXTRACT(payload,\'$.patientId\')=?',[id]);
     for(const id of appointments) await write('DELETE FROM agendamentos WHERE id=?',[id]);
     for(const id of accounts.reverse()) await write('DELETE FROM usuarios WHERE id=?',[id]);
     await database().end(); redis().disconnect();

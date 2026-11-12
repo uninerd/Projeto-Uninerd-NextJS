@@ -1,6 +1,5 @@
 import type { Actor } from '@/server/shared/auth';
 import { requireCondition } from '@/server/shared/errors';
-import { publishAppointment } from '@/server/shared/events';
 import { doctorService } from '../doctors/doctor.service';
 import { appointmentRepository } from './appointment.repository';
 import type { AppointmentDto, UpdateAppointmentDto } from './appointment.dto';
@@ -14,19 +13,18 @@ export const appointmentService = {
   async create(actor: Actor, data: AppointmentDto) {
     const aggregate = AppointmentAggregate.schedule(actor, data);
     await doctorService.get(data.doctorId);
-    const appointment = (await appointmentRepository.create(aggregate))!;
-    await publishAppointment('appointment.created', appointment); return { id: appointment.id, message: 'Agendamento criado com sucesso' };
+    const appointment = (await appointmentRepository.create(aggregate, actor))!;
+    return { id: appointment.id, message: 'Agendamento criado com sucesso' };
   },
   async update(actor: Actor, id: number, data: UpdateAppointmentDto) {
     const existing = await this.get(actor, id);
     AppointmentAggregate.restore(existing).update(actor, data);
     await doctorService.get(data.doctorId);
-    const appointment = (await appointmentRepository.change(id, aggregate => aggregate.update(actor, data), data.doctorId))!;
-    await publishAppointment(data.status === 'CANCELADO' ? 'appointment.cancelled' : 'appointment.updated', appointment);
+    await appointmentRepository.change(id, aggregate => aggregate.update(actor, data), actor, data.doctorId);
     return { message: 'Agendamento atualizado com sucesso!' };
   },
   async cancel(actor: Actor, id: number) {
-    const appointment = (await appointmentRepository.change(id, aggregate => aggregate.cancel(actor)))!;
-    await publishAppointment('appointment.cancelled', appointment); return { message: 'Agendamento cancelado com sucesso.' };
+    await appointmentRepository.change(id, aggregate => aggregate.cancel(actor), actor);
+    return { message: 'Agendamento cancelado com sucesso.' };
   },
 };
