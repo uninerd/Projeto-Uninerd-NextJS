@@ -7,6 +7,7 @@
     "dev": "npm run dev:frontend",
     "dev:frontend": "node frontend/node_modules/next/dist/bin/next dev frontend --port 3000",
     "dev:backend": "node --env-file=.env backend/node_modules/next/dist/bin/next dev backend --port 3001",
+    "dev:notifications": "npm run dev --prefix microservices/notifications",
     "build": "npm run build --prefix backend && npm run build --prefix frontend",
     "typecheck": "tsc --noEmit && npm run typecheck --prefix backend && npm run typecheck --prefix frontend",
     "test": "tsx --test tests/*.test.ts",

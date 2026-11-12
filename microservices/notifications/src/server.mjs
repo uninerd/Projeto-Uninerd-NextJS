@@ -10,14 +10,26 @@ import { timingSafeEqual } from 'node:crypto';
 import Redis from 'ioredis';
 import { eventDto } from './events.mjs';
 import { createStore } from './store.mjs';
-const internalKey = process.env.INTERNAL_KEY;
+const internalKey = process.env.INTERNAL_KEY ?? process.env.NOTIFICATIONS_INTERNAL_KEY;
 if (!internalKey || internalKey.length < 32) throw new Error('INTERNAL_KEY must contain at least 32 characters');
 const directory = process.env.DATA_DIRECTORY ?? './data';
 mkdirSync(directory, { recursive: true });
 const store = createStore(join(directory, 'notifications.sqlite'));
 const log = (event, fields = {}) => console.log(JSON.stringify({ timestamp: new Date().toISOString(), event, service: 'notifications', ...fields }));
-const subscriber = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', { retryStrategy: attempt => Math.min(attempt*500,5000), connectTimeout: 3000 });
+let subscribed = false;
+const subscriber = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
+  lazyConnect: true, autoResubscribe: false, enableOfflineQueue: false,
+  maxRetriesPerRequest: 1, connectTimeout: 3000,
+  retryStrategy: attempt => Math.min(attempt*500,5000),
+});
 subscriber.on('error', () => log('redis.unavailable'));
+subscriber.on('close', () => { subscribed = false; });
+subscriber.on('ready', () => {
+  subscriber.subscribe('uninerd:appointments').then(() => {
+    subscribed = subscriber.status === 'ready';
+    if (subscribed) log('redis.subscribed');
+  }).catch(() => { subscribed = false; log('redis.subscribe_failed'); });
+});
 subscriber.on('message', (_channel, message) => {
   try {
     const event = eventDto.parse(JSON.parse(message)); store.save(event);
@@ -26,7 +38,6 @@ subscriber.on('message', (_channel, message) => {
     log('event.consumed', { lagMs, eventId: event.eventId, type: event.event, appointmentId: event.appointmentId });
   } catch { log('event.rejected'); }
 });
-await subscriber.subscribe('uninerd:appointments');
 const server = http.createServer(async (request, response) => {
   response.setHeader('content-type', 'application/json; charset=utf-8');
   response.setHeader('cache-control', 'no-store');
@@ -36,7 +47,10 @@ const server = http.createServer(async (request, response) => {
     response.setHeader('content-type', registry.contentType);
     response.end(await registry.metrics()); return;
   }
-  if (request.url === '/health') return reply(subscriber.status === 'ready' ? 200 : 503, { status: subscriber.status === 'ready' ? 'ok' : 'degraded' });
+  if (request.url === '/health') {
+    const ready = subscriber.status === 'ready' && subscribed;
+    return reply(ready ? 200 : 503, { status: ready ? 'ok' : 'degraded' });
+  }
   const key = request.headers['x-internal-key'];
   if (typeof key !== 'string' || Buffer.byteLength(key) !== Buffer.byteLength(internalKey) || !timingSafeEqual(Buffer.from(key),Buffer.from(internalKey))) return reply(401, { message: 'Unauthorized' });
   const match = /^\/notifications\/(\d+)$/.exec(request.url ?? '');
@@ -45,7 +59,9 @@ const server = http.createServer(async (request, response) => {
   catch { log('store.read_failed'); reply(503, { message: 'Service unavailable' }); }
 });
 server.listen(Number(process.env.PORT ?? 3002), '0.0.0.0', () => log('service.started'));
-async function shutdown() {
-  server.close(); await subscriber.quit(); store.close(); process.exit(0);
+subscriber.connect().catch(() => { /* retryStrategy keeps reconnecting; HTTP is already available. */ });
+function shutdown() {
+  subscriber.disconnect();
+  server.close(() => { store.close(); process.exit(0); });
 }
 process.on('SIGTERM', shutdown); process.on('SIGINT', shutdown);
