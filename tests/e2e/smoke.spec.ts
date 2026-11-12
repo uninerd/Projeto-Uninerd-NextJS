@@ -16,9 +16,15 @@ test('administrator session, catalog, notifications and logout work in browser',
   await expect(page.getByRole('button',{ name:'Cadastrar Médico' })).toBeVisible();
   await page.getByRole('button',{ name:'Cadastrar Médico' }).click();
   await expect(page.getByLabel('E-mail de acesso')).toBeVisible();
+  const inboxResponse=page.waitForResponse(response=>new URL(response.url()).pathname==='/api/notifications' && response.request().method()==='GET');
   await page.getByRole('link',{ name:'Notificações' }).click();
   await expect(page.getByRole('heading',{ name:'Notificações',exact:true })).toBeVisible();
-  await expect(page.getByText('Você ainda não tem notificações.')).toBeVisible();
+  const response=await inboxResponse; expect(response.ok()).toBe(true);
+  const {data}=await response.json();
+  if(data.length) {
+    await expect(page.locator('main li')).toHaveCount(data.length);
+    await expect(page.getByText(data[0].message,{exact:true})).toBeVisible();
+  } else await expect(page.getByText('Você ainda não tem notificações.')).toBeVisible();
   await page.getByRole('button',{ name:'Sair do Sistema' }).click(); await expect(page).toHaveURL(/\/login$/);
   const session = (await page.context().cookies()).find(cookie=>cookie.name==='uninerd_session'); expect(session).toBeUndefined();
   expect(errors).toEqual([]);

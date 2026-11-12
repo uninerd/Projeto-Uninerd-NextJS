@@ -55,10 +55,49 @@ test('full flow: accounts, permissions, concurrent booking, Redis cache and noti
     assert.ok(refreshed.data.some((row:{ name:string })=>row.name==='Médico Integração Atualizado'));
 
     const date=new Date(Date.now()+30*86400000).toISOString().slice(0,10)+'T10:00:00';
+    const day = date.slice(0,10);
+    const weekday = new Date(`${day}T12:00:00Z`).getUTCDay();
+    const week = { days: [{ weekday, hours: ['10:00','11:00'] }] };
+    const empty = await (await api(`doctors/${doctor.id}/availability?date=${day}`,'GET',undefined,patientCookie)).json();
+    assert.deepEqual(empty.hours, [], 'An unconfigured doctor must not accept bookings');
+    assert.equal((await api(`doctors/${doctor.id}/schedule?date=${day}`,'GET',undefined,patientCookie)).status,403);
+    assert.equal((await api(`doctors/${doctor.id}/weekly-schedule`,'PUT',week,adminCookie)).status,403);
+    assert.equal((await api(`doctors/${doctor.id}/schedule`,'PUT',{ date:day,hours:['10:00'] },patientCookie)).status,403);
+    assert.equal((await api(`doctors/${doctor.id}/schedule`,'PUT',{ date:day,hours:['10:30'] },doctorCookie)).status,400);
+    const savedWeek=await api(`doctors/${doctor.id}/weekly-schedule`,'PUT',week,doctorCookie);
+    assert.equal(savedWeek.status,200,await savedWeek.clone().text());
+    const selectedWeek=(await savedWeek.json()).days.find((entry:{ weekday:number })=>entry.weekday===weekday);
+    assert.deepEqual(selectedWeek.hours,['10:00','11:00']);
+    const nextWeek=new Date(`${day}T12:00:00Z`); nextWeek.setUTCDate(nextWeek.getUTCDate()+7);
+    const nextDay=nextWeek.toISOString().slice(0,10);
+    const recurring=await (await api(`doctors/${doctor.id}/availability?date=${nextDay}`,'GET',undefined,patientCookie)).json();
+    assert.deepEqual(recurring.hours,['10:00','11:00']);
+    assert.equal((await api(`doctors/${doctor.id}/schedule`,'PUT',{ date:nextDay,hours:[] },doctorCookie)).status,200);
+    const closedDate=await (await api(`doctors/${doctor.id}/availability?date=${nextDay}`,'GET',undefined,patientCookie)).json();
+    assert.deepEqual(closedDate.hours,[], 'A closed date overrides the recurring week');
     const payload={ doctorId:doctor.id,date,type:'consulta' };
+    assert.equal((await api('appointments','POST',{...payload,date:day+'T09:00:00'},patientCookie)).status,409);
     const responses=await Promise.all([api('appointments','POST',payload,patientCookie),api('appointments','POST',payload,patientCookie)]);
     assert.deepEqual(responses.map(r=>r.status).sort(),[201,409]);
     const created=await responses.find(r=>r.status===201)!.json(); appointments.push(created.id);
+    assert.equal((await api(`doctors/${doctor.id}/schedule`,'PUT',{date:day,hours:[]},doctorCookie)).status,409);
+    assert.equal((await api(`doctors/${doctor.id}/weekly-schedule`,'PUT',{days:[]},doctorCookie)).status,409);
+    assert.equal((await api(`appointments/${created.id}`,'PUT',{...payload,date:day+'T12:00:00',status:'AGENDADO'},patientCookie)).status,409);
+
+    const raceDay=new Date(`${day}T12:00:00Z`); raceDay.setUTCDate(raceDay.getUTCDate()+2);
+    const raceDate=raceDay.toISOString().slice(0,10);
+    assert.equal((await api(`doctors/${doctor.id}/schedule`,'PUT',{date:raceDate,hours:['14:00']},doctorCookie)).status,200);
+    const [racingBooking,racingClose]=await Promise.all([
+      api('appointments','POST',{...payload,date:raceDate+'T14:00:00'},patientCookie),
+      api(`doctors/${doctor.id}/schedule`,'PUT',{date:raceDate,hours:[]},doctorCookie),
+    ]);
+    if (racingBooking.status===201) {
+      appointments.push((await racingBooking.json()).id);
+      assert.equal(racingClose.status,409,'Closing must not remove a newly booked slot');
+    } else {
+      assert.equal(racingBooking.status,409,'Booking must reject a concurrently closed slot');
+      assert.equal(racingClose.status,200);
+    }
     const edited=await api(`appointments/${created.id}`,'PUT',{ ...payload,type:'exame',status:'AGENDADO' },patientCookie);
     assert.equal(edited.status,200,await edited.clone().text());
     const persisted=await (await api(`appointments/${created.id}`,'GET',undefined,doctorCookie)).json();
