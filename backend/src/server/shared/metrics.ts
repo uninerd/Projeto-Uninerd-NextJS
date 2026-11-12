@@ -1,6 +1,7 @@
 import { Registry, Counter, Histogram, Gauge, collectDefaultMetrics } from '@prometheus-io/client';
 
 export function routeLabel(path: string) {
+  if (path === '/api/internal/appointment-events') return path;
   if (/^\/api\/(health|ready|notifications|specialties|doctors|appointments)$/.test(path)) return path;
   if (/^\/api\/users\/(login|register|logout|me)$/.test(path)) return path;
   if (/^\/api\/(users|doctors|appointments|specialties)\/\d+$/.test(path)) return path.replace(/\d+$/, ':id');

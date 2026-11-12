@@ -3,19 +3,27 @@ import { Registry, Counter, Histogram, collectDefaultMetrics } from '@prometheus
 const registry = new Registry();
 collectDefaultMetrics({ register: registry, prefix: 'uninerd_notifications_' });
 const consumed = new Counter({ name: 'uninerd_events_consumed_total', help: 'Validated events persisted (includes duplicates)', labelNames: ['event'], registers: [registry] });
-const lag = new Histogram({ name: 'uninerd_event_lag_seconds', help: 'Publish to persist time with connected subscriber', labelNames: ['event'], buckets: [.01,.05,.1,.25,.5,1,2,5,10], registers: [registry] });
+const lag = new Histogram({ name: 'uninerd_event_lag_seconds', help: 'Event to persist time including outbox recovery', labelNames: ['event'], buckets: [.01,.05,.1,.25,.5,1,2,5,10], registers: [registry] });
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { timingSafeEqual } from 'node:crypto';
 import Redis from 'ioredis';
 import { eventDto } from './events.mjs';
 import { createStore } from './store.mjs';
+import { createRecovery } from './recovery.mjs';
 const internalKey = process.env.INTERNAL_KEY ?? process.env.NOTIFICATIONS_INTERNAL_KEY;
 if (!internalKey || internalKey.length < 32) throw new Error('INTERNAL_KEY must contain at least 32 characters');
 const directory = process.env.DATA_DIRECTORY ?? './data';
 mkdirSync(directory, { recursive: true });
 const store = createStore(join(directory, 'notifications.sqlite'));
 const log = (event, fields = {}) => console.log(JSON.stringify({ timestamp: new Date().toISOString(), event, service: 'notifications', ...fields }));
+function persist(event) {
+  const inserted=store.save(event);
+  const lagMs = Math.max(0, Date.now()-Date.parse(event.timestamp));
+  consumed.inc({ event: event.event });
+  if (inserted > 0) lag.observe({ event: event.event }, lagMs/1000);
+  log('event.consumed', { lagMs, eventId: event.eventId, type: event.event, appointmentId: event.appointmentId });
+}
 let subscribed = false;
 const subscriber = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
   lazyConnect: true, autoResubscribe: false, enableOfflineQueue: false,
@@ -32,10 +40,7 @@ subscriber.on('ready', () => {
 });
 subscriber.on('message', (_channel, message) => {
   try {
-    const event = eventDto.parse(JSON.parse(message)); store.save(event);
-    const lagMs = Math.max(0, Date.now()-Date.parse(event.timestamp));
-    consumed.inc({ event: event.event }); lag.observe({ event: event.event }, lagMs/1000);
-    log('event.consumed', { lagMs, eventId: event.eventId, type: event.event, appointmentId: event.appointmentId });
+    persist(eventDto.parse(JSON.parse(message)));
   } catch { log('event.rejected'); }
 });
 const server = http.createServer(async (request, response) => {
@@ -53,14 +58,22 @@ const server = http.createServer(async (request, response) => {
   }
   const key = request.headers['x-internal-key'];
   if (typeof key !== 'string' || Buffer.byteLength(key) !== Buffer.byteLength(internalKey) || !timingSafeEqual(Buffer.from(key),Buffer.from(internalKey))) return reply(401, { message: 'Unauthorized' });
-  const match = /^\/notifications\/(\d+)$/.exec(request.url ?? '');
+  const url = new URL(request.url ?? '/', 'http://localhost');
+  const match = /^\/notifications\/(\d+)$/.exec(url.pathname);
   if (!match || !Number.isSafeInteger(Number(match[1])) || Number(match[1]) < 1) return reply(404, { message: 'Not found' });
-  try { reply(200, { data: store.list(Number(match[1])) }); }
+  const offset = Number(url.searchParams.get('offset') ?? '0');
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > 1000000) return reply(400, { message: 'Invalid offset' });
+  try {
+    const data = store.list(Number(match[1]), offset, 101);
+    reply(200, { data: data.slice(0,100), nextOffset: data.length > 100 ? offset + 100 : null });
+  }
   catch { log('store.read_failed'); reply(503, { message: 'Service unavailable' }); }
 });
 server.listen(Number(process.env.PORT ?? 3002), '0.0.0.0', () => log('service.started'));
 subscriber.connect().catch(() => { /* retryStrategy keeps reconnecting; HTTP is already available. */ });
+const stopRecovery = createRecovery({ backendUrl: process.env.BACKEND_URL ?? 'http://localhost:3001', key: internalKey, save: persist, log });
 function shutdown() {
+  stopRecovery();
   subscriber.disconnect();
   server.close(() => { store.close(); process.exit(0); });
 }

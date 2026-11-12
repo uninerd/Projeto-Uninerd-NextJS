@@ -5,5 +5,6 @@ RUN npm ci --omit=dev --no-fund --no-audit
 COPY backend/scripts/seed-admin.mjs ./scripts/seed-admin.mjs
 COPY backend/scripts/migrate.mjs ./scripts/migrate.mjs
 COPY database/03-doctor-availability.sql ./database/03-doctor-availability.sql
+COPY database/04-appointment-outbox.sql ./database/04-appointment-outbox.sql
 USER node
 CMD ["node", "scripts/seed-admin.mjs"]
