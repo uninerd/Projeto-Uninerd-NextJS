@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { database, write } from '../../backend/src/server/shared/database';
+import { login as loginWithBudget } from './auth';
 
 const password = 'JornadaForte@123';
 function cpf() {
@@ -9,12 +10,7 @@ function cpf() {
   return digits.join('');
 }
 async function login(page:Page,email:string,senha=password) {
-  await page.goto('/login');
-  await page.getByLabel('E-mail',{ exact:true }).fill(email);
-  await page.getByLabel('Senha',{ exact:true }).fill(senha);
-  const response = page.waitForResponse(r=>r.url().endsWith('/api/users/login') && r.request().method()==='POST');
-  await page.getByRole('button',{ name:'Entrar',exact:true }).click();
-  expect((await response).status()).toBe(200); await expect(page).toHaveURL('/');
+  await loginWithBudget(page,email,senha);
 }
 async function logout(page:Page) {
   const response=page.waitForResponse(r=>r.url().endsWith('/api/users/logout') && r.request().method()==='POST');
